@@ -338,6 +338,13 @@ def plot_best(trace=None, data_train=None, data_test=None,
     axs[6].set(xlabel='difference of means normalized by volatility',
                ylabel='belief', yticklabels=[])
 
+def timer(times, previous_time, key):
+    from time import time
+    current_time = time()
+    run_time = current_time - previous_time
+    times[key] = run_time
+    print("Time to run {} was {:.3f} seconds.").format(key, run_time)
+    return current_time
 
 def model_stoch_vol(data, samples=2000):
     """Run stochastic volatility model.
@@ -365,22 +372,37 @@ def model_stoch_vol(data, samples=2000):
     """
     from pymc3.distributions.timeseries import GaussianRandomWalk
 
+    alltimes = {}
+    from time import time
+    start_time = time()
+    previous_time = start_time
     with pm.Model():
         nu = pm.Exponential('nu', 1./10, testval=5.)
         sigma = pm.Exponential('sigma', 1./.02, testval=.1)
         s = GaussianRandomWalk('s', sigma**-2, shape=len(data))
         volatility_process = pm.Deterministic('volatility_process',
                                               pm.exp(-2*s))
+        previous_time = timer(alltimes, previous_time, 'priors')
         pm.T('r', nu, lam=volatility_process, observed=data)
+        previous_time = timer(alltimes, previous_time, 'T')
         start = pm.find_MAP(vars=[s], fmin=sp.optimize.fmin_l_bfgs_b)
+        previous_time = timer(alltimes, previous_time, 'find_MAP')
 
         step = pm.NUTS(scaling=start)
+        previous_time = timer(alltimes, previous_time, 'burn_in_step')
         trace = pm.sample(100, step, progressbar=False)
+        previous_time = timer(alltimes, previous_time, 'burn_in_sample')
 
         # Start next run at the last sampled position.
         step = pm.NUTS(scaling=trace[-1], gamma=.25)
+        previous_time = timer(alltimes, previous_time, 'full_step')
         trace = pm.sample(samples, step, start=trace[-1],
                           progressbar=False, njobs=2)
+        previous_time = timer(alltimes, previous_time, 'full_sample')
+
+        alltimes['total_time'] = time() - start_time
+        for key, times in alltimes.items():
+            print(key, times)
 
     return trace
 
