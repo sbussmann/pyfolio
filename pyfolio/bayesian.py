@@ -377,6 +377,7 @@ def model_stoch_vol(data, samples=2000):
     start_time = time()
     previous_time = start_time
     with pm.Model():
+        print("Working with data of size {}...").format(len(data))
         nu = pm.Exponential('nu', 1./10, testval=5.)
         sigma = pm.Exponential('sigma', 1./.02, testval=.1)
         s = GaussianRandomWalk('s', sigma**-2, shape=len(data))
@@ -401,10 +402,11 @@ def model_stoch_vol(data, samples=2000):
         previous_time = timer(alltimes, previous_time, 'full_sample')
 
         alltimes['total_time'] = time() - start_time
+        alltimes['ndata'] = len(data)
         for key, times in alltimes.items():
             print(key, times)
 
-    return trace
+    return trace, alltimes
 
 
 def plot_stoch_vol(data, trace=None, ax=None):
